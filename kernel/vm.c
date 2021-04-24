@@ -484,9 +484,10 @@ void page_in(uint64 faulting_address, pte_t * missing_pte_entry){
   if (readFromSwapFile(myproc(),read_buffer ,offset,PGSIZE) == -1)
     panic("read from file failed");
   if(get_num_of_pages_in_memory() >= MAX_PSYC_PAGES){
-    swap_page_into_file(offset); //maybe adding it in the end of the swap file?
+    swap_page_into_file(offset); //maybe adding it in the end of the swap
     *missing_pte_entry = PTE2PA((uint64)read_buffer) | ((PTE_FLAGS(*missing_pte_entry)& ~PTE_PG) | PTE_V);
   }  
+
   else{
       *missing_pte_entry = PTE2PA((uint64)read_buffer) | PTE_V; 
   }

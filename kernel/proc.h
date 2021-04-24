@@ -84,7 +84,7 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 //assign 3
 struct meta_data{
-  uint offset; //offset in swapFile. -1 not in swapFile 
+  int offset; //offset in swapFile. -1 not in swapFile 
   uint aging;  //for each algorithm will be treated differently 
   int in_memory;
 };

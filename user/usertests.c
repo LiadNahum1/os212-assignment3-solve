@@ -1772,7 +1772,7 @@ manywrites(char *s)
       printf("fork failed\n");
       exit(1);
     }
-
+    
     if(pid == 0){
       char name[3];
       name[0] = 'b';

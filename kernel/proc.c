@@ -141,19 +141,13 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
   
-  //assign 3
-  //don't change kernel processes init and more
-  if(p->pid > 2){
-    if(createSwapFile(p) != 0){
-      panic("create swap file failed");
-    }
-  }
-  
+  //assign 3 
  for(int i=0;i<32;i++){
     p->paging_meta_data[i].offset = -1;
     p->paging_meta_data[i].aging = 0;
     p->paging_meta_data[i].in_memory = 0;
  }
+
   return p;
 }
 
@@ -162,7 +156,8 @@ found:
 // p->lock must be held.
 static void
 freeproc(struct proc *p)
-{
+{ 
+
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -177,6 +172,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  
+
 }
 
 // Create a user page table for a given process,
@@ -283,15 +280,18 @@ growproc(int n)
 void 
 copy_swap_file(struct proc* child){
   struct proc * pParent = myproc();
-  uint offset; 
-  for(int i = 0; i < pParent->sz; i += PGSIZE){
+  int offset; 
+  for(uint64 i = 0; i < pParent->sz; i += PGSIZE){
     offset = pParent->paging_meta_data[i/PGSIZE].offset;
     if(offset != -1){
-      char buffer[PGSIZE];
+      char* buffer;
+      if((buffer = kalloc()) == 0)
+      panic("not enough space to kalloc");
       if(readFromSwapFile(pParent, buffer, offset, PGSIZE) == -1)
           panic("read failed\n");
       if(writeToSwapFile(child, buffer, offset, PGSIZE ) == -1)
           panic("write failed\n");
+      kfree(buffer);
     }
   }
 }
@@ -309,17 +309,7 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
-  //copy parent's swap file 
-  if(p->pid > 2){ 
-    copy_swap_file(np);
-  }
-  //copy parent's paging_meta_data 
-  for(int i=0; i<32; i++){
-    np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
-    np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
-    np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
-  }
-
+  
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
@@ -345,6 +335,24 @@ fork(void)
   pid = np->pid;
 
   release(&np->lock);
+  //assign3
+  //don't change kernel processes init and more
+  if(np->pid >2){
+    if(createSwapFile(np) != 0){
+      panic("create swap file failed");
+    }
+  }
+  //copy parent's swap file 
+  if(p->pid > 2){ 
+    copy_swap_file(np);
+  }
+
+  //copy parent's paging_meta_data 
+  for(int i=0; i<32; i++){
+    np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
+    np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
+    np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
+  }
 
   acquire(&wait_lock);
   np->parent = p;
@@ -391,7 +399,11 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  if(p->pid > 2)
+  {
+    //assign3
+    removeSwapFile(p);
+  }
   begin_op();
   iput(p->cwd);
   end_op();
