@@ -87,7 +87,7 @@ struct meta_data{
   uint offset; //offset in swapFile. -1 not in swapFile 
   uint aging;  //for each algorithm will be treated differently 
   int in_memory;
-}meta_data;
+};
 
 // Per-process state
 struct proc {
@@ -114,6 +114,6 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   struct file *swapFile;
-  meta_data paging_meta_data[32];
+  struct meta_data paging_meta_data[32];
 };
 

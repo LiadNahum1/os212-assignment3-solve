@@ -140,17 +140,20 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
+  
   //assign 3
-  if(createSwapFile(p) != 0){
-    panic("create swap file failed")
+  //don't change kernel processes init and more
+  if(p->pid > 2){
+    if(createSwapFile(p) != 0){
+      panic("create swap file failed");
+    }
   }
   
  for(int i=0;i<32;i++){
     p->paging_meta_data[i].offset = -1;
     p->paging_meta_data[i].aging = 0;
     p->paging_meta_data[i].in_memory = 0;
-  }
+ }
   return p;
 }
 
@@ -277,6 +280,22 @@ growproc(int n)
   return 0;
 }
 
+void 
+copy_swap_file(struct proc* child){
+  struct proc * pParent = myproc();
+  uint offset; 
+  for(int i = 0; i < pParent->sz; i += PGSIZE){
+    offset = pParent->paging_meta_data[i/PGSIZE].offset;
+    if(offset != -1){
+      char buffer[PGSIZE];
+      if(readFromSwapFile(pParent, buffer, offset, PGSIZE) == -1)
+          panic("read failed\n");
+      if(writeToSwapFile(child, buffer, offset, PGSIZE ) == -1)
+          panic("write failed\n");
+    }
+  }
+}
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -289,6 +308,16 @@ fork(void)
   // Allocate process.
   if((np = allocproc()) == 0){
     return -1;
+  }
+  //copy parent's swap file 
+  if(p->pid > 2){ 
+    copy_swap_file(np);
+  }
+  //copy parent's paging_meta_data 
+  for(int i=0; i<32; i++){
+    np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
+    np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
+    np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
   }
 
   // Copy user memory from parent to child.
