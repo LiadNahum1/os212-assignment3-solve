@@ -331,6 +331,7 @@ sfence_vma()
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // 1 -> user can access
+#define PTE_A (1L << 6) //access
 #define PTE_PG (1L << 10) // Paged out to secondary storage
 
 // shift a physical address to the right place for a PTE.
@@ -353,3 +354,18 @@ sfence_vma()
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
+
+//assign 3
+#define MAX_PSYC_PAGES 16
+#define MAX_TOTAL_PAGES 32
+
+//replacement algorithms
+#define NFUA 1
+#define LAPA 2
+#define SCFIFO 3
+#define AQ 4
+#define NONE 5
+
+#define LAPA_AGE 0xFFFFFFFF
+#define SHIFT_ON (1L << 31)
+#define USER_MEMORY_INDEX 3

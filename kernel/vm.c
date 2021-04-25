@@ -8,7 +8,9 @@
 //added
 #include "spinlock.h"
 #include "proc.h"
-
+void lazy_memory_allocation(uint64 faulting_address);
+int find_file_to_remove();
+uint init_aging(int fifo_init_pages);
 /*
  * the kernel's page table.
  */
@@ -183,8 +185,25 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       kfree((void*)pa);
     }
     *pte = 0;
+  
+      /*
+     //assign3
+    pte = walk(pagetable, a, 0);
+    if(pte != 0){
+      if(PTE_FLAGS(*pte) == PTE_V)
+        panic("uvmunmap: not a leaf");
+       
+      if( (*pte & PTE_V)!=0){  
+      if(do_free){
+        uint64 pa = PTE2PA(*pte);
+        kfree((void*)pa);
+      }
+      *pte = 0;
+    }
+  }*/
   }
 }
+
 
 // create an empty user page table.
 // returns 0 if out of memory.
@@ -228,17 +247,22 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
-    mem = kalloc();
-    if(mem == 0){
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
+    /*if(myproc()->pid > 2){
+      walk(pagetable, a, 1);
     }
-    memset(mem, 0, PGSIZE);
-    if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
-      kfree(mem);
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
-    }
+    else{*/
+      mem = kalloc();
+      if(mem == 0){
+        uvmdealloc(pagetable, a, oldsz);
+        return 0;
+      }
+      memset(mem, 0, PGSIZE);
+      if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+        kfree(mem);
+        uvmdealloc(pagetable, a, oldsz);
+        return 0;
+      }
+   // }
   }
   return newsz;
 }
@@ -319,6 +343,20 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       kfree(mem);
       goto err;
     }
+    /*
+    //assign3
+    if((pte = walk(old, i, 0)) !=0 && ((*pte & PTE_V) != 0)){
+      pa = PTE2PA(*pte);
+      flags = PTE_FLAGS(*pte);
+      if((mem = kalloc()) == 0)
+        goto err;
+      memmove(mem, (char*)pa, PGSIZE);
+      if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+        kfree(mem);
+        goto err;
+      }
+    }*/
+    
   }
   return 0;
 
@@ -433,14 +471,8 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   }
 }
 
-int find_file_to_remove(){
-  for(int i=0; i<32; i++){
-    if(myproc()->paging_meta_data[i].in_memory){
-      return i; 
-    }
-  }
-  return 0;
-}
+
+ 
 
 void swap_page_into_file(int offset){
     struct proc * p = myproc();
@@ -450,10 +482,10 @@ void swap_page_into_file(int offset){
     pte_t *out_page_entry =  walk(p->pagetable, removed_page_VA, 0); 
     //write the information from this file to memory
     uint64 physical_addr = PTE2PA(*out_page_entry);
-    if(writeToSwapFile(p,(char*)PA2PTE(physical_addr),offset,PGSIZE) ==  -1)
+    if(writeToSwapFile(p,(char*)physical_addr,offset,PGSIZE) ==  -1)
       panic("write to file failed");
     //free the RAM memmory of the swapped page
-    kfree((void*)PA2PTE(physical_addr));
+    kfree((void*)physical_addr);
     *out_page_entry = (*out_page_entry & (~PTE_V)) | PTE_PG;
     p->paging_meta_data[remove_file_indx].offset = offset;
     p->paging_meta_data[remove_file_indx].in_memory = 0;
@@ -485,32 +517,222 @@ void page_in(uint64 faulting_address, pte_t * missing_pte_entry){
     panic("read from file failed");
   if(get_num_of_pages_in_memory() >= MAX_PSYC_PAGES){
     swap_page_into_file(offset); //maybe adding it in the end of the swap
-    *missing_pte_entry = PTE2PA((uint64)read_buffer) | ((PTE_FLAGS(*missing_pte_entry)& ~PTE_PG) | PTE_V);
+    *missing_pte_entry = PA2PTE((uint64)read_buffer) | ((PTE_FLAGS(*missing_pte_entry)& ~PTE_PG) | PTE_V);
   }  
-
   else{
-      *missing_pte_entry = PTE2PA((uint64)read_buffer) | PTE_V; 
+      *missing_pte_entry = PA2PTE((uint64)read_buffer) | PTE_V; 
   }
   //update offsets and aging of the files
-  //myproc()->paging_meta_data[current_num_pages].aging = init_aging(current_num_pages);
+  myproc()->paging_meta_data[current_page_number].aging = init_aging(current_page_number);
   myproc()->paging_meta_data[current_page_number].offset = -1;
   myproc()->paging_meta_data[current_page_number].in_memory = 1;
   sfence_vma(); //refresh TLB
 }
 
+void lazy_memory_allocation(uint64 faulting_address){
+    char * mem = kalloc();
+    if(mem == 0){
+      panic("not enough space to kalloc");
+    }
+    memset(mem, 0, PGSIZE);
+    if(mappages(myproc()->pagetable, PGROUNDDOWN(faulting_address), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      kfree(mem);
+      panic("mappages failed");
+    }
+}
+
 void check_page_fault(){
   uint64 faulting_address = r_stval(); 
   pte_t * pte_entry = walk(myproc()->pagetable, PGROUNDDOWN(faulting_address), 0); //maybe doesn't have to pagedown 
-  if((!(PTE_FLAGS(*pte_entry) & PTE_V) ) & (PTE_FLAGS(*pte_entry) & PTE_PG)){
-    printf("Page Fault - Page was out of memory");
+  if(pte_entry !=0 && ((!(PTE_FLAGS(*pte_entry) & PTE_V) ) & (PTE_FLAGS(*pte_entry) & PTE_PG))){
+    printf("Page Fault - Page was out of memory\n");
     page_in(faulting_address, pte_entry);
   }
-  /*
-  else if(!(*pte_entry & PTE_W)& (*pte_entry & PTE_COW)){
-     cprintf("Page Fault- COPY ON WRITE\n");
-     create_write_through(faulting_address, pte_entry);
-  }*/
   else{
-    printf("went to file without permissions!!! %d\n", faulting_address);
+    printf("Page Fault - Lazy allocation\n");
+    printf("%d\n", faulting_address);
+    lazy_memory_allocation(faulting_address);
   }
+}
+
+
+int minimum_counter_NFUA(){
+  struct proc * p = myproc();
+  uint min_age = -1;
+  int index_page = -1;
+  for (int i = USER_MEMORY_INDEX; i <32; i++){ 
+    if (p->paging_meta_data[i].in_memory ){
+        if (min_age == -1 || (uint)p->paging_meta_data[i].aging < min_age){
+          min_age = p->paging_meta_data[i].aging;
+          index_page = i;
+        }
+      }
+  }
+  if(min_age == -1)
+    panic("page replacment algorithem failed");
+  return index_page;
+}
+
+int count_one_bits(uint age){
+  int count = 0;
+  while(age) {
+      count += age & 1;
+      age >>= 1;
+  }
+  return count;
+}
+
+int minimum_ones(){
+  struct proc * p = myproc();
+  int min_ones = -1;
+  int min_age = -1;
+  int index_page = -1;
+  uint age;
+  for (int i = USER_MEMORY_INDEX; i <32; i++){
+    if (p->paging_meta_data[i].in_memory ){
+      age =  p->paging_meta_data[i].aging;
+      int count_ones =  count_one_bits(age);
+      if (min_ones == -1 || count_ones < min_ones || (count_ones == min_ones && age < min_age)){
+        min_ones = count_ones;
+        min_age = age;
+        index_page = i;
+      }
+    }
+  }
+  if(min_ones == -1)
+    panic("page replacment algorithem failed");
+  return index_page;
+}
+
+void remove_from_queue(struct age_queue * q){
+  q->front = q->front+1;
+   if(q->front == 32) {
+      q->front = 0;
+   }
+   q->page_counter = q->page_counter-1;
+   
+}
+void insert_to_queue(int inserted_page){
+  struct proc * process = myproc();
+  struct age_queue * q = &process->queue;
+  if(inserted_page >= 3){
+    if (q->last == 31)
+      q->last = -1;
+    q->last = q->last + 1;
+    q->pages[q->last] =inserted_page;
+    q->page_counter =  q->page_counter + 1;
+  }
+}
+int second_fifo(){
+  struct proc * p = myproc();
+  struct age_queue * q = &(p->queue);
+  int current_page;
+  int page_counter = q->page_counter;
+  for (int i = 0; i<page_counter; i++){
+    current_page = q->pages[q->front];
+    pte_t * pte = walk(p->pagetable, current_page*PGSIZE,0);
+    uint pte_flags = PTE_FLAGS(*pte);
+    if(!(pte_flags & PTE_A)){
+      printf("not accsesed %d", current_page);
+      remove_from_queue(q);
+      return current_page; //the file will no longer be in the memory and will be removed next time
+    }
+    else{ //the page has been accsesed
+      *pte = *pte & (~PTE_A); //make A bit off
+      printf("removing accsesed bit from %d", current_page);
+      remove_from_queue(q);
+      insert_to_queue(current_page);
+    }
+  }
+  current_page = q->pages[q->front];
+  remove_from_queue(q);
+  return current_page;
+}
+
+int minimum_advanicing_queue(){
+  struct proc * p = myproc();
+  struct age_queue * q = &(p->queue);
+  int current_page = q->pages[q->front];
+  remove_from_queue(q);
+  return current_page;
+}
+int find_file_to_remove(){
+  #if SELECTION==NFUA
+    return minimum_counter_NFUA();
+  #endif
+  #if SELECTION == LAPA
+    return minimum_ones();
+  #endif
+  #if SELECTION==SCFIFO
+    return second_fifo(); 
+  #endif
+  #if SELECTION == AQ
+    return minimum_advanicing_queue(); 
+  #endif
+  return 0;
+}
+
+void shift_counter(){
+ struct proc * p = myproc();
+ pte_t * pte;
+ for(int i=0; i<32; i++){
+      uint page_virtual_address = i*PGSIZE;
+      pte = walk(myproc()->pagetable, page_virtual_address, 0);
+      if(*pte & PTE_V){
+        p->paging_meta_data[i].aging = p->paging_meta_data[i].aging>>1;
+        if(*pte & PTE_A){
+          p->paging_meta_data[i].aging = p->paging_meta_data[i].aging | SHIFT_ON;
+          *pte = *pte & (~PTE_A); //turn off
+        }
+      }
+    }
+}
+void shift_queue(){
+  struct proc * p = myproc();
+  struct age_queue * q = &(p->queue);
+  int front = q->front;
+  int page_count = q->page_counter;
+  for(int i = page_count-2; i >0; i--){ //front + i is the index of the one before last page in the queue
+    int temp = q->pages[(front+ i)%32];
+    pte_t * pte = walk(p->pagetable, temp*PGSIZE,0);
+    uint pte_flags = PTE_FLAGS(*pte);
+    if(pte_flags & PTE_A){
+      q->pages[(front + i)%32] = q->pages[(front + i + 1)%32];
+      q->pages[(front + 1 + i)%32] = temp;; 
+    }
+    *pte = *pte & (~PTE_A);
+  }
+}
+//update aging algorithm when the process returns to the scheduler
+void
+update_aging_algorithms(void){
+  #if SELECTION == NFUA
+      shift_counter();
+  #endif
+  #if SELECTION == LAPA
+      shift_counter();
+  #endif
+  #if SELECTION==SCFIFO
+  return;
+  #endif
+  #if SELECTION == AQ
+    shift_queue();
+  #endif
+return;
+}
+
+uint init_aging(int fifo_init_pages){
+  #if SELECTION == NFUA
+    return 0;
+  #endif
+  #if SELECTION == LAPA
+    return LAPA_AGE;
+  #endif
+  #if SELECTION == AQ
+    return insert_to_queue(fifo_init_pages);
+  #endif
+  #if SELECTION==SCFIFO
+    return insert_to_queue(fifo_init_pages);
+  #endif 
+  return 0;
 }

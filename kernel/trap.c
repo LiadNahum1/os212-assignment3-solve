@@ -66,9 +66,9 @@ usertrap(void)
 
     syscall();
   } 
-  /*else if(r_scause() == 13 || r_scause() == 15){
+  else if(r_scause() == 13 || r_scause() == 15){
     check_page_fault();
-  }*/
+  }
   else if((which_dev = devintr()) != 0){
     // ok
   } else {

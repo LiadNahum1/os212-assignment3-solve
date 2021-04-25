@@ -88,6 +88,12 @@ struct meta_data{
   uint aging;  //for each algorithm will be treated differently 
   int in_memory;
 };
+struct age_queue{
+  int pages[32];
+  int front; //first element in queue
+  int last;  //last element in queue
+  int page_counter; //number of elements in queue
+};
 
 // Per-process state
 struct proc {
@@ -115,5 +121,6 @@ struct proc {
 
   struct file *swapFile;
   struct meta_data paging_meta_data[32];
+  struct age_queue queue;
 };
 

@@ -148,6 +148,13 @@ found:
     p->paging_meta_data[i].in_memory = 0;
  }
 
+  p->queue.front = 0;
+  p->queue.last = -1;
+  p->queue.page_counter = 0;
+  for(int i=0; i<32; i++){
+    p->queue.pages[i] = -1;
+  }
+
   return p;
 }
 
@@ -262,6 +269,20 @@ userinit(void)
 int
 growproc(int n)
 {
+  /*uint sz;
+  struct proc *p = myproc();
+  
+  sz = p->sz;
+
+  if(n < 0){
+    sz = uvmdealloc(p->pagetable, sz, sz + n);
+    p->sz = sz; 
+  }
+  else
+    p->sz = p->sz + n; 
+  
+  return 0;*/
+  
   uint sz;
   struct proc *p = myproc();
 
@@ -288,9 +309,9 @@ copy_swap_file(struct proc* child){
       if((buffer = kalloc()) == 0)
       panic("not enough space to kalloc");
       if(readFromSwapFile(pParent, buffer, offset, PGSIZE) == -1)
-          panic("read failed\n");
+          panic("read swap file failed\n");
       if(writeToSwapFile(child, buffer, offset, PGSIZE ) == -1)
-          panic("write failed\n");
+          panic("write swap file failed\n");
       kfree(buffer);
     }
   }
@@ -304,7 +325,6 @@ fork(void)
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
-
   // Allocate process.
   if((np = allocproc()) == 0){
     return -1;
@@ -335,6 +355,7 @@ fork(void)
   pid = np->pid;
 
   release(&np->lock);
+
   //assign3
   //don't change kernel processes init and more
   if(np->pid >2){
@@ -343,15 +364,22 @@ fork(void)
     }
   }
   //copy parent's swap file 
-  if(p->pid > 2){ 
+ /* if(p->pid > 2){ 
     copy_swap_file(np);
-  }
+  }*/
 
   //copy parent's paging_meta_data 
   for(int i=0; i<32; i++){
     np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
     np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
     np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
+  }
+    //init queues
+  np->queue.front = myproc()->queue.front;
+  np->queue.last = myproc()->queue.last;
+  np->queue.page_counter = myproc()->queue.page_counter;
+  for(int i=0; i<32; i++){
+    np->queue.pages[i] = myproc()->queue.pages[i];
   }
 
   acquire(&wait_lock);
@@ -505,7 +533,7 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
-
+        update_aging_algorithms();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
