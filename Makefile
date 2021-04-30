@@ -31,7 +31,7 @@ OBJS = \
   $K/virtio_disk.o
 
 ifndef SELECTION
- SELECTION=SCFIFO
+ SELECTION=NONE
 endif
 
 

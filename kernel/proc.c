@@ -140,21 +140,6 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-  
-  //assign 3 
- for(int i=0;i<32;i++){
-    p->paging_meta_data[i].offset = -1;
-    p->paging_meta_data[i].aging = 0;
-    p->paging_meta_data[i].in_memory = 0;
- }
-
-  p->queue.front = 0;
-  p->queue.last = -1;
-  p->queue.page_counter = 0;
-  for(int i=0; i<32; i++){
-    p->queue.pages[i] = -1;
-  }
-
   return p;
 }
 
@@ -271,20 +256,6 @@ growproc(int n)
 {
   /*uint sz;
   struct proc *p = myproc();
-  
-  sz = p->sz;
-
-  if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
-    p->sz = sz; 
-  }
-  else
-    p->sz = p->sz + n; 
-  
-  return 0;*/
-  
-  uint sz;
-  struct proc *p = myproc();
 
   sz = p->sz;
   if(n > 0){
@@ -295,6 +266,17 @@ growproc(int n)
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
+  return 0;*/
+
+  //assign3
+  uint sz;
+  struct proc *p = myproc();
+
+  sz = p->sz;
+  if(n < 0){
+    sz = uvmdealloc(p->pagetable, sz, sz + n);
+  }
+  p->sz = p->sz + n;
   return 0;
 }
 
@@ -358,30 +340,31 @@ fork(void)
 
   //assign3
   //don't change kernel processes init and more
-  if(np->pid >2){
-    if(createSwapFile(np) != 0){
-      panic("create swap file failed");
+  #if ! SELECTION==NONE
+    if(np->pid >2){
+      if(createSwapFile(np) != 0){
+        panic("create swap file failed");
+      }
     }
-  }
-  //copy parent's swap file 
- /* if(p->pid > 2){ 
-    copy_swap_file(np);
-  }*/
+    //copy parent's swap file 
+    if(p->pid > 2){ 
+        copy_swap_file(np);
+      }
 
-  //copy parent's paging_meta_data 
-  for(int i=0; i<32; i++){
-    np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
-    np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
-    np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
-  }
-    //init queues
-  np->queue.front = myproc()->queue.front;
-  np->queue.last = myproc()->queue.last;
-  np->queue.page_counter = myproc()->queue.page_counter;
-  for(int i=0; i<32; i++){
-    np->queue.pages[i] = myproc()->queue.pages[i];
-  }
-
+    //copy parent's paging_meta_data 
+    for(int i=0; i<32; i++){
+      np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
+      np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
+      np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
+    }
+      //init queues
+    np->queue.front = myproc()->queue.front;
+    np->queue.last = myproc()->queue.last;
+    np->queue.page_counter = myproc()->queue.page_counter;
+    for(int i=0; i<32; i++){
+      np->queue.pages[i] = myproc()->queue.pages[i];
+    }
+  #endif
   acquire(&wait_lock);
   np->parent = p;
   release(&wait_lock);
