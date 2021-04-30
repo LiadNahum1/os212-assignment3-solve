@@ -487,10 +487,14 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
   uint tot, m;
   struct buf *bp;
 
-  if(off > ip->size || off + n < off)
+  if(off > ip->size || off + n < off){
+    printf("if 1 %d %d %d\n", off, n, ip->size);
     return -1;
-  if(off + n > MAXFILE*BSIZE)
+  }
+  if(off + n > MAXFILE*BSIZE){
+        printf("if 2\n");
     return -1;
+  }
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
     bp = bread(ip->dev, bmap(ip, off/BSIZE));

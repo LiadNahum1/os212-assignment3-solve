@@ -30,9 +30,6 @@ OBJS = \
   $K/plic.o \
   $K/virtio_disk.o
 
-ifndef SELECTION
- SELECTION=NONE
-endif
 
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
@@ -138,6 +135,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_lazytests\
+	$U/_test\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

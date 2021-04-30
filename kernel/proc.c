@@ -140,6 +140,20 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  //assign 3
+  //initialize new field
+  for(int i=0;i<32;i++){
+    p->paging_meta_data[i].offset = -1;
+    p->paging_meta_data[i].aging = 0;
+    p->paging_meta_data[i].in_memory = 0;
+  }
+  p->queue.front = 0;
+  p->queue.last = -1;
+  
+  for(int i=0; i<32; i++){
+    p->queue.pages[i] = -1;
+  }
   return p;
 }
 
@@ -340,16 +354,19 @@ fork(void)
 
   //assign3
   //don't change kernel processes init and more
-  #if ! SELECTION==NONE
+  #if SELECTION != NONE
+
     if(np->pid >2){
+
       if(createSwapFile(np) != 0){
         panic("create swap file failed");
-      }
+      }     
     }
     //copy parent's swap file 
     if(p->pid > 2){ 
         copy_swap_file(np);
       }
+  #endif
 
     //copy parent's paging_meta_data 
     for(int i=0; i<32; i++){
@@ -364,7 +381,7 @@ fork(void)
     for(int i=0; i<32; i++){
       np->queue.pages[i] = myproc()->queue.pages[i];
     }
-  #endif
+
   acquire(&wait_lock);
   np->parent = p;
   release(&wait_lock);

@@ -1,40 +1,31 @@
 
-#include "types.h"
-#include "stat.h"
-#include "user.h"
-
+#include "kernel/types.h"
+#include "kernel/stat.h"
+#include "user/user.h"
 void 
 testall(){
   int i = 0;
-  uint c = 16;
-  uint pointers[c];
-  printf(1, "IN PARENT: BEFORE SBRK BEFORE FORK Number of free pages %d\n" ,getNumberOfFreePages());
+  uint64 c = 17;
+  uint64 pointers[c];
+  printf("IN PARENT: BEFORE SBRK BEFORE FORK Number of free pages \n");
   for (i = 0 ; i < c ; i++){
-        pointers[i] = (uint)sbrk(4096);
+        pointers[i] = (uint64)sbrk(4096);
         * (char *) pointers[i] = (char) ('a' + i);
+        printf("%c\n",  * (char *) pointers[i]);
   }
 
-  printf(1, "IN PARENT:AFTER SBARK BEFORE FORK Number of free pages %d\n" ,getNumberOfFreePages());
+  printf("IN PARENT:AFTER SBARK BEFORE FORK Number of free pages \n");
   int pid;
   if( (pid = fork()) ==0){
-      printf(1, "IN CHILD: Number of free pages %d\n" ,getNumberOfFreePages());
+      printf("IN CHILD: Number of free pages \n");
       for (i = 0 ; i < c ; i++){
-        printf(1, "%c\n", *(char * )pointers[i]);
+        printf("letter %c\n", i, *(char * )pointers[i]);
       }
-      printf(1, "IN CHILD: change content of first page from a to b\n");
-      * (char *) pointers[10] = (char) ('b');
-      * (char *) pointers[11] = (char) ('c');
-      printf(1,"IN CHILD pointers[10] %c\n", *(char * )pointers[10]);
-      printf(1,"IN CHILD pointers[11] %c\n", *(char * )pointers[11]);
-      printf(1, "IN CHILD: Number of free pages  %d\n" ,getNumberOfFreePages());
-      exit();
+      exit(0);
   }
   else{
-    wait();
-    printf(1,"IN PARENT pointers[10] %c\n", *(char * )pointers[10]);
-    printf(1,"IN PARENT pointers[11] %c\n", *(char * )pointers[11]);
-    printf(1, "IN PARENT: Number of free pages  %d\n" ,getNumberOfFreePages());
- 
+    int status;
+    wait(&status); 
   }
 }
 /*
@@ -60,8 +51,9 @@ testSecFIFO(){
 int
 main(void)
 {
-  printf(1, "--------- test  ---------\n");
+  printf( "--------- test  ---------\n");
   testall();
   //testSecFIFO();
-  exit();
+  exit(0);
+  return 0; 
 }
