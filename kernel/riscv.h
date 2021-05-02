@@ -363,8 +363,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define NFUA 1
 #define LAPA 2
 #define SCFIFO 3
-#define NONE 4
-#define SELECTION 3
+#define NONE 4 //The paging framework is disabled – behavior should stay as in the original xv6 
 
 #define LAPA_AGE 0xFFFFFFFF
 #define SHIFT_ON (1L << 31)

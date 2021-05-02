@@ -248,7 +248,6 @@ kfilewrite(struct file *f, uint64 addr, int n)
       end_op();
 
       if(r != n1){
-            printf("here??? %d", r);
         // error from writei
         break;
       }

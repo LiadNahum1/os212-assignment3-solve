@@ -188,6 +188,7 @@ void origin_uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_fre
     *pte = 0;
     }
 }
+//uvmunmap is called as in origion xv6
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -207,18 +208,23 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
           uint64 pa = PTE2PA(*pte);
           kfree((void*)pa);
           #if SELECTION != NONE
-            myproc()->paging_meta_data[a/PGSIZE].in_memory = 0;
-            myproc()->paging_meta_data[a/PGSIZE].offset = -1;
-            remove_from_queue_not_in_memory(a/PGSIZE);
+            if(a/PGSIZE < 32){
+              myproc()->paging_meta_data[a/PGSIZE].in_memory = 0;
+              myproc()->paging_meta_data[a/PGSIZE].offset = -1;
+              remove_from_queue_not_in_memory(a/PGSIZE);
+            }
           #endif
         }
-        *pte = 0;
       }
-      else if(do_free){
-         #if SELECTION != NONE
-            myproc()->paging_meta_data[ a/PGSIZE].offset = -1;
-          #endif
+      else{
+        #if SELECTION != NONE
+            if(a/PGSIZE < 32){
+                myproc()->paging_meta_data[a/PGSIZE].offset = -1;
+            }
+        #endif
+
       }
+       *pte = 0; //even if not in memory we want to earase itf flag so won't even be PAGED_OUT
   }
 }
 }
@@ -304,10 +310,12 @@ origin_uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz){
   }
   return newsz;
 }
+
+//uvmalloc is called in a lazy manner 
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
-  #if SELECTION == NONE 
+  #if SELECTION == NONE  //no paging - can alloc more than 32 pages 
     return origin_uvmalloc(pagetable, oldsz, newsz);
   #endif 
   char *mem;
@@ -326,7 +334,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
          uvmdealloc(pagetable, newsz, oldsz);
          return 0;
       }
-      //update flags to be not PTE_P
+      //update flags to be not PTE_V
       pte = walk(pagetable, a, 0);
       *pte = *pte & (~PTE_V);
       int offset = find_min_empty_offset();
@@ -438,9 +446,6 @@ int origin_uvmcopy(pagetable_t old, pagetable_t new, uint64 sz){
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-  #if SELECTION == NONE 
-    return origin_uvmcopy(old, new, sz);
-  #endif 
   pte_t *pte;
   uint64 pa, i;
   uint flags;
@@ -576,17 +581,14 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   }
 }
 
-
- 
-
 void swap_page_into_file(int offset){
     struct proc * p = myproc();
     int remove_file_indx = find_file_to_remove();
     uint64 removed_page_VA = remove_file_indx*PGSIZE;
-    printf("chosen page %d \n", remove_file_indx);
     pte_t *out_page_entry =  walk(p->pagetable, removed_page_VA, 0); 
     //write the information from this file to memory
     uint64 physical_addr = PTE2PA(*out_page_entry);
+    printf("Chosen page %d. Data in chosen page is %s\n", remove_file_indx, physical_addr);
     if(writeToSwapFile(p,(char*)physical_addr,offset,PGSIZE) ==  -1)
       panic("write to file failed");
     //free the RAM memmory of the swapped page
@@ -601,13 +603,12 @@ int get_num_of_pages_in_memory(){
   int counter = 0;
   for(int i=0; i<32; i++){
     if(myproc()->paging_meta_data[i].in_memory){
-      printf("pid %d , %d in memory\n", myproc()->pid, i);
+      printf("pid %d , %d in memory, aging %d\n", myproc()->pid, i, myproc()->paging_meta_data[i].aging);
       counter = counter+1;
     }
   }
   return counter; 
 }
-
 
 void page_in(uint64 faulting_address, pte_t * missing_pte_entry){
   //get the page number of the missing in ram page
@@ -709,13 +710,13 @@ int minimum_ones(){
 uint64 insert_to_queue(int inserted_page){
   struct proc * process = myproc();
   struct age_queue * q = &process->queue;
-  if(inserted_page >= 3){
+  //if(inserted_page >= 3){
     if (q->last == 31)
       q->last = -1;
     q->last = q->last + 1;
     q->pages[q->last] =inserted_page;
     q->page_counter =  q->page_counter + 1;
-  }
+ // }
   return 0;
 }
 
@@ -758,7 +759,7 @@ int second_fifo(){
     }
     else{ //the page has been accsesed
       *pte = *pte & (~PTE_A); //make A bit off
-      printf("removing accsesed bit from %d", current_page);
+      printf("removing accsesed bit from %d\n", current_page);
       remove_from_queue(q);
       insert_to_queue(current_page);
     }

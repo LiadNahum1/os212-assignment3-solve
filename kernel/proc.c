@@ -241,6 +241,8 @@ uchar initcode[] = {
 void
 userinit(void)
 {
+  printf("SELECTION IS %d \n", SELECTION);
+  
   struct proc *p;
 
   p = allocproc();
@@ -265,10 +267,8 @@ userinit(void)
 
 // Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
-int
-growproc(int n)
-{
-  /*uint sz;
+int origin_growproc(int n){
+   uint sz;
   struct proc *p = myproc();
 
   sz = p->sz;
@@ -280,8 +280,12 @@ growproc(int n)
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
-  return 0;*/
+  return 0;
+}
 
+int
+growproc(int n)
+{
   //assign3
   uint sz;
   struct proc *p = myproc();
@@ -353,34 +357,31 @@ fork(void)
   release(&np->lock);
 
   //assign3
-  //don't change kernel processes init and more
   #if SELECTION != NONE
-
-    if(np->pid >2){
-
       if(createSwapFile(np) != 0){
         panic("create swap file failed");
       }     
-    }
+
     //copy parent's swap file 
-    if(p->pid > 2){ 
+    if(p->pid > 1){ 
         copy_swap_file(np);
       }
   #endif
-
-    //copy parent's paging_meta_data 
-    for(int i=0; i<32; i++){
-      np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
-      np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
-      np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
-    }
-      //init queues
-    np->queue.front = myproc()->queue.front;
-    np->queue.last = myproc()->queue.last;
-    np->queue.page_counter = myproc()->queue.page_counter;
-    for(int i=0; i<32; i++){
-      np->queue.pages[i] = myproc()->queue.pages[i];
-    }
+ 
+  //can check if SELECTION != NONE but it is not necessary we can initialize those fields anyway 
+  //copy parent's paging_meta_data 
+  for(int i=0; i<32; i++){
+    np->paging_meta_data[i].offset = myproc()->paging_meta_data[i].offset;
+    np->paging_meta_data[i].aging = myproc()->paging_meta_data[i].aging;
+    np->paging_meta_data[i].in_memory = myproc()->paging_meta_data[i].in_memory;
+  }
+    //init queues
+  np->queue.front = myproc()->queue.front;
+  np->queue.last = myproc()->queue.last;
+  np->queue.page_counter = myproc()->queue.page_counter;
+  for(int i=0; i<32; i++){
+    np->queue.pages[i] = myproc()->queue.pages[i];
+  }
 
   acquire(&wait_lock);
   np->parent = p;
@@ -427,7 +428,7 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-  if(p->pid > 2)
+  if(p->pid > 1)
   {
     //assign3
     removeSwapFile(p);

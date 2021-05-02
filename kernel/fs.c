@@ -488,11 +488,9 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
   struct buf *bp;
 
   if(off > ip->size || off + n < off){
-    printf("if 1 %d %d %d\n", off, n, ip->size);
     return -1;
   }
   if(off + n > MAXFILE*BSIZE){
-        printf("if 2\n");
     return -1;
   }
 
